@@ -14,13 +14,4 @@ Kurulum yok: indir, çift tıkla. FFmpeg içinde geliyor. Yeni sürüm çıkınc
 
 Windows ilk açılışta "tanınmayan uygulama" uyarısı verebilir: **Ek bilgi → Yine de çalıştır**.
 
-## Geliştirme
-
-```bash
-pip install -r requirements.txt
-python app.py
-```
-
-Yeni sürüm yayınlamak için `yayinla.bat` çalıştır ve sürüm numarasını yaz; GitHub `.exe`'yi kendisi derleyip yayınlar.
-
 Shrinkut, GPLv3 lisanslı [FFmpeg](https://ffmpeg.org) içerir.
