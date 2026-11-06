@@ -1,0 +1,7 @@
+customtkinter==6.0.0
+darkdetect==0.8.0
+imageio-ffmpeg==0.8.1
+packaging==26.3
+pillow==13.0.0
+pyinstaller==6.22.3
+tkinterdnd2==0.7.0

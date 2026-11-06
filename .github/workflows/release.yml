@@ -1,0 +1,40 @@
+# v ile başlayan bir etiket (ör. v1.0.1) gönderildiğinde .exe'yi derleyip GitHub sürümü olarak yayınlar.
+name: Yayınla
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Sürüm numarasını etiketten yaz
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}'.TrimStart('v')
+          (Get-Content app.py -Raw -Encoding utf8) -replace "VERSION = '[^']*'", "VERSION = '$v'" |
+            Set-Content app.py -Encoding utf8 -NoNewline
+
+      - name: Paketleri kur
+        run: pip install -r requirements.txt
+
+      - name: .exe derle
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name Shrinkut --icon icon.ico
+          --add-data "icon.ico;." --collect-data customtkinter --collect-all tkinterdnd2
+          --collect-binaries imageio_ffmpeg app.py
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Shrinkut.exe
+          generate_release_notes: true
