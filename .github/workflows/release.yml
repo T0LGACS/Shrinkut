@@ -1,4 +1,6 @@
-# v ile başlayan bir etiket (ör. v1.0.1) gönderildiğinde .exe'yi derleyip GitHub sürümü olarak yayınlar.
+# v ile başlayan bir etiket (ör. v1.0.1) gönderildiğinde .exe'yi derler, SignPath ayarlıysa imzalar
+# ve GitHub sürümü olarak yayınlar. SignPath ayarları (depo değişkenleri + gizli anahtar) girilmediyse
+# imzalama adımları atlanır ve .exe imzasız yayınlanır.
 name: Yayınla
 
 on:
@@ -7,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
@@ -22,8 +25,12 @@ jobs:
         shell: pwsh
         run: |
           $v = '${{ github.ref_name }}'.TrimStart('v')
+          $t = (@($v.Split('.')) + '0') -join ', '
           (Get-Content app.py -Raw -Encoding utf8) -replace "VERSION = '[^']*'", "VERSION = '$v'" |
             Set-Content app.py -Encoding utf8 -NoNewline
+          (Get-Content version_info.txt -Raw -Encoding utf8) -replace "'\d+\.\d+\.\d+'", "'$v'" -replace '\(\d+, \d+, \d+, 0\)', "($t)" |
+            Set-Content version_info.txt -Encoding utf8 -NoNewline
+          "VERSION=$v" >> $env:GITHUB_ENV
 
       - name: Paketleri kur
         run: pip install -r requirements.txt
@@ -31,10 +38,45 @@ jobs:
       - name: .exe derle
         run: >
           pyinstaller --noconfirm --onefile --windowed --name Shrinkut --icon icon.ico
-          --add-data "icon.ico;." --collect-data customtkinter --collect-all tkinterdnd2
-          --collect-binaries imageio_ffmpeg app.py
+          --version-file version_info.txt --add-data "icon.ico;." --collect-data customtkinter
+          --collect-all tkinterdnd2 --collect-binaries imageio_ffmpeg app.py
+
+      - name: İmzalanacak .exe'yi yükle
+        id: unsigned
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: Shrinkut-imzasiz
+          path: dist/Shrinkut.exe
+
+      - name: SignPath ile imzala
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # her imza SignPath sitesinden elle onaylanır; onay için 1 saat beklenir
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: imzali
+          parameters: |
+            version: "${{ env.VERSION }}"
+
+      - name: İmzalı .exe'yi yayınlanacak yere koy
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem imzali -Recurse -Filter Shrinkut.exe | Select-Object -First 1
+          if (-not $signed) { throw 'İmzalı Shrinkut.exe bulunamadı' }
+          Copy-Item $signed.FullName dist/Shrinkut.exe -Force
 
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/Shrinkut.exe
+          body: >
+            Kurulum gerekmez: **Shrinkut.exe**'yi indirip çalıştır.
+            [Code signing policy](https://github.com/T0LGACS/Shrinkut#kod-imzalama-politikası-code-signing-policy)
           generate_release_notes: true

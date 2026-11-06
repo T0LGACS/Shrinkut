@@ -141,6 +141,23 @@ def latest_release():
 def ps_quote(s):
     return "'" + s.replace("'", "''") + "'"
 
+
+SETTINGS = os.path.join(os.environ.get('APPDATA') or os.path.expanduser('~'), 'Shrinkut', 'ayarlar.json')
+
+
+def load_settings():
+    try:
+        with open(SETTINGS, encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_settings(settings):
+    os.makedirs(os.path.dirname(SETTINGS), exist_ok=True)
+    with open(SETTINGS, 'w', encoding='utf-8') as f:
+        json.dump(settings, f)
+
 ctk.set_appearance_mode('dark')
 
 def resource(name):
@@ -175,14 +192,41 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.var_mb = tk.StringVar(value='490')
         self._encoder = None
         self._encoder_ready = threading.Event()
+        self._settings = load_settings()
+        self.var_update = tk.BooleanVar(value=self._settings.get('update_check', True))
         self._build_ui()
         self.drop_target_register(DND_FILES)
         self.dnd_bind('<<Drop>>', self._on_drop)
         threading.Thread(target=self._detect_encoder, daemon=True).start()
         if getattr(sys, 'frozen', False):  # sadece .exe kendini güncelleyebilir
-            threading.Thread(target=self._check_update, daemon=True).start()
+            self.after(300, self._init_update_check)
 
     # ------------------------------------------------------------------ güncelleme
+    def _init_update_check(self):
+        # kullanıcıya sormadan ağa bağlanma: ilk açılışta bir kez izin iste
+        if 'update_check' not in self._settings:
+            self.var_update.set(messagebox.askyesno(
+                'Güncellemeler',
+                'Shrinkut her açılışta GitHub\'dan yeni sürüm olup olmadığını denetlesin mi?\n\n'
+                'Bunun için GitHub\'a yalnızca son sürümün numarası sorulur; videoların ya da '
+                'kişisel bilgilerin hiçbir yere gönderilmez.\n\n'
+                'Bu ayarı pencerenin altındaki kutucuktan istediğin zaman değiştirebilirsin.'))
+            self._save_update_pref()
+        if self.var_update.get():
+            threading.Thread(target=self._check_update, daemon=True).start()
+
+    def _on_update_toggle(self):
+        self._save_update_pref()
+        if self.var_update.get() and getattr(sys, 'frozen', False):
+            threading.Thread(target=self._check_update, daemon=True).start()
+
+    def _save_update_pref(self):
+        self._settings['update_check'] = bool(self.var_update.get())
+        try:
+            save_settings(self._settings)
+        except OSError:
+            pass  # ayar kaydedilemese de uygulama çalışmaya devam etsin
+
     def _check_update(self):
         try:
             rel = latest_release()
@@ -364,7 +408,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.btn_out.grid(row=0, column=2, sticky='e', padx=14)
 
         # --- Başlat + ilerleme ---
-        run = self._card(3, pady=(0, 20))
+        run = self._card(3, pady=(0, 8))
         run.grid_columnconfigure(1, weight=1)
         self.btn_run = ctk.CTkButton(run, text='▶  Başlat', command=self._run, width=150, height=44,
                                      corner_radius=10, fg_color=ACCENT, hover_color=ACCENT_HOVER,
@@ -378,6 +422,12 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.progress = ctk.CTkProgressBar(run, height=10, corner_radius=5, fg_color=CARD2, progress_color=CARD2)
         self.progress.set(0)
         self.progress.grid(row=1, column=1, sticky='new', padx=(0, 10), pady=(6, 14))
+
+        ctk.CTkCheckBox(self, text='Açılışta yeni sürümü GitHub\'dan denetle', variable=self.var_update,
+                        command=self._on_update_toggle, font=self._font(12), text_color=MUTED,
+                        checkbox_width=16, checkbox_height=16, border_width=2, corner_radius=4,
+                        fg_color=ACCENT, hover_color=ACCENT_HOVER, border_color=BORDER
+                        ).grid(row=4, column=0, sticky='w', padx=26, pady=(0, 14))
 
         self._toggle_mode()
 

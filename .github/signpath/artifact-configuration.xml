@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath'te projenin "Artifact configuration" alanına yapıştırılır.
+     GitHub derlemesi Shrinkut.exe'yi zip içinde gönderir; ürün adı ve sürümü version_info.txt'den gelir. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" default-value="1.0.0" />
+  </parameters>
+  <zip-file>
+    <pe-file path="Shrinkut.exe" product-name="Shrinkut" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>
